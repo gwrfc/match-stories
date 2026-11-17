@@ -61,6 +61,31 @@ function drawScores(home,away,ink){
   // A solid, centered dash keeps the separator strong at every score size.
   ctx.fillStyle=ink;ctx.fillRect(491,892,98,26);ctx.restore();
 }
+function detailLines(value,maxWidth,size){
+  ctx.font=`700 ${size}px "Story Avenir", "Avenir Next Condensed", "Arial Narrow", sans-serif`;
+  const words=String(value).trim().split(/\s+/),lines=[];let line='';
+  for(const word of words){
+    if(ctx.measureText(word).width>maxWidth)return null;
+    const next=line?line+' '+word:word;
+    if(line&&ctx.measureText(next).width>maxWidth){lines.push(line);line=word}else line=next;
+  }
+  if(line)lines.push(line);return lines.length<=2?lines:null;
+}
+function drawDetail(value,top,ink,preferredSize=66){
+  if(!String(value).trim())return;
+  const maxWidth=780;let size=preferredSize,lines;
+  ctx.save();
+  while(size>=8){lines=detailLines(value,maxWidth,size);if(lines)break;size-=2}
+  if(lines){const lineHeight=size*1.18;lines.forEach((line,i)=>text(line,540,top+size/2+i*lineHeight,size,ink,maxWidth))}
+  ctx.restore();
+}
+function drawWin(ink){
+  const label='REVS WIN!',size=94,targetWidth=780;
+  ctx.save();ctx.font=`italic 600 ${size}px "Story Avenir", "Avenir Next Condensed", "Arial Narrow", sans-serif`;
+  const width=ctx.measureText(label).width;
+  ctx.translate(540,595);ctx.scale(targetWidth/width,1);
+  text(label,0,0,size,ink,2000,true);ctx.restore();
+}
 function render(){
   if(!ready)return;const f=fields(),blue=f.theme==='blue',ink=blue?'#ffffff':'#092b50';
   ctx.clearRect(0,0,1080,1920);ctx.drawImage(backgrounds[f.theme]||backgrounds.buff,0,0,1080,1920);
@@ -73,7 +98,11 @@ function render(){
   }else{
     drawHeadline(190,350);
     if(kick)text("LET'S GO REVS!",540,650,110,ink,950);
-    else text(f.detail||(mode==='try'?'RAISE HIGH. RAISE HELL.':''),540,660,64,ink,950);
+    else{
+      const win=mode==='full'&&Number(f.gwScore)>Number(f.oppScore);
+      if(win)drawWin(ink);
+      drawDetail(f.detail||(mode==='try'?'RAISE HIGH. RAISE HELL.':''),win?650:570,ink,win?42:66);
+    }
     drawScores(kick?0:f.gwScore,kick?0:f.oppScore,ink);
     badge('gw',310,1280,140);badge('opponent',770,1280,140);text(separator,540,1280,82,ink,140);
 
@@ -94,7 +123,7 @@ function render(){
   prepareExport();
 }
 form.addEventListener('input',()=>{render();save()});form.addEventListener('change',()=>{render();save()});
-document.querySelectorAll('[data-points]').forEach(b=>b.onclick=()=>{form.elements.gwScore.value=Math.min(999,Number(form.elements.gwScore.value)+Number(b.dataset.points));render();save()});
+document.querySelectorAll('[data-points]').forEach(b=>b.onclick=()=>{const field=b.dataset.team==='opponent'?form.elements.oppScore:form.elements.gwScore;field.value=Math.min(999,Math.max(0,Number(field.value)||0)+Number(b.dataset.points));render();save()});
 $('#guides').onclick=()=>{const on=$('.safe-overlay').hidden;$('.safe-overlay').hidden=!on;$('#guides').setAttribute('aria-pressed',on)};
 $('#reset').onclick=()=>{for(const[k,v]of Object.entries(defaults))form.elements[k].value=v;selectMode('match');save()};
 let preparedFile=null,exportRevision=0,exportTimer,previewUrl;
