@@ -12,7 +12,7 @@ const headlineFiles={match:"match-day",kickoff:"kick-off",score:"score-update",h
 async function init(){try{[backgrounds.buff,backgrounds.blue,gwCrest]=await Promise.all([load('assets/story-background-buff-v4.png'),load('assets/story-background-blue-v4.png'),load('assets/clubs/george-washington-university.png')]);await Promise.all(opponents.map(async team=>{opponentImages[team.name]=await load(team.src)}));await Promise.all(Object.entries(headlineFiles).map(async ([key,file])=>{headlines[key]={buff:await load('assets/headlines/'+file+'.svg'),blue:await load('assets/headlines/'+file+'-white.svg')}}));await Promise.allSettled([document.fonts.load('700 60px "Story Avenir"'),document.fonts.load('italic 600 60px "Story Avenir"')]);ready=true;render()}catch{$('#status').textContent='Could not load the club artwork. Please refresh.';setExportEnabled(false)}}
 function fields(){return Object.fromEntries(new FormData(form))}
 function save(){try{localStorage.setItem('gw-story-v1',JSON.stringify({mode,fields:fields()}));$('#saved').textContent='Saved on this device'}catch{$('#saved').textContent='Changes kept for this session'}}
-function selectMode(m){mode=m;$('#moments').innerHTML=layouts.map(([id,icon,label])=>`<button type="button" class="moment ${m===id?'active':''}" aria-pressed="${m===id}" data-mode="${id}"><b>${icon}</b>${label}</button>`).join('');$('#scoreFields').hidden=m==='match'||m==='kickoff'||m==='lineup';$('#lineupFields').hidden=m!=='lineup';$('#matchFields').hidden=false;for(const name of ['address','note'])form.elements[name].closest('label').hidden=m==='lineup';syncLineup();render()}
+function selectMode(m){mode=m;$('#moments').innerHTML=layouts.map(([id,icon,label])=>`<button type="button" class="moment ${m===id?'active':''}" aria-pressed="${m===id}" data-mode="${id}"><b>${icon}</b>${label}</button>`).join('');$('#scoreFields').hidden=m==='match'||m==='kickoff'||m==='lineup';$('#lineupFields').hidden=m!=='lineup';$('#matchFields').hidden=false;form.elements.note.closest('label').hidden=m!=='match';for(const name of ['date','kickoff'])form.elements[name].closest('label').hidden=m!=='match'&&m!=='lineup';syncLineup();render()}
 $('#moments').addEventListener('click',e=>{const b=e.target.closest('button');if(b){selectMode(b.dataset.mode);save()}});
 function text(str,x,y,size=60,color,max=930,italic=false){
   if(!str)return;
@@ -81,11 +81,7 @@ function drawDetail(value,top,ink,preferredSize=66){
   ctx.restore();
 }
 function drawWin(ink){
-  const label='REVS WIN!',size=94,targetWidth=780;
-  ctx.save();ctx.font=`italic 600 ${size}px "Story Avenir", "Avenir Next Condensed", "Arial Narrow", sans-serif`;
-  const width=ctx.measureText(label).width;
-  ctx.translate(540,595);ctx.scale(targetWidth/width,1);
-  text(label,0,0,size,ink,2000,true);ctx.restore();
+  text('REVS WIN!',540,595,104,ink,680,true);
 }
 function syncLineup(selected=form.elements.captain.value){
   const players=lineupTools.parse(form.elements.players.value),captain=form.elements.captain;
@@ -114,7 +110,7 @@ function drawLineup(f,ink){
   ctx.fillText(separator,separatorCenter-(metrics.actualBoundingBoxRight-metrics.actualBoundingBoxLeft)/2,320);
   ctx.restore();badge('opponent',circleX,320,circleRadius);
   const players=lineupTools.parse(f.players).slice(0,23),rowCount=Math.max(15,players.length);
-  const rowHeight=Math.min(76,1200/rowCount),baseSize=Math.min(66,rowHeight*.91);
+  const rowHeight=Math.min(76,1160/rowCount),baseSize=Math.min(66,rowHeight*.91);
   for(let i=0;i<rowCount;i++){
     const y=510+i*rowHeight,name=players[i]?lineupTools.name(players,i,f.captain):'—';
     ctx.save();ctx.font=`700 ${baseSize}px "Story Avenir", "Avenir Next Condensed", "Arial Narrow", sans-serif`;
@@ -126,8 +122,9 @@ function drawLineup(f,ink){
     ctx.fillText(name,260,y);ctx.restore();
   }
   let date='';if(f.date){const d=new Date(f.date+'T12:00:00');if(!isNaN(d))date=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).toUpperCase()}
-  text([date,f.kickoff].filter(Boolean).join('  ·  '),540,1775,56,ink,950,true);
-  text(f.venue,540,1850,68,ink,950,true);
+  text([date,f.kickoff?'KICK-OFF '+f.kickoff:''].filter(Boolean).join('  ·  '),540,1710,64,ink,950,true);
+  text(f.venue,540,1790,94,ink,950,true);
+  text(f.address,540,1865,70,ink,950,true);
 }
 function render(){
   if(!ready)return;const f=fields(),blue=f.theme==='blue',ink=blue?'#ffffff':'#092b50';
@@ -138,14 +135,14 @@ function render(){
   if(match){
     drawHeadline(200,510);
     badge('gw',315,1000,150);badge('opponent',765,1000,150);text(separator,540,1000,90,ink,130);
-    teamName('GW REVS',315,1210);teamName(f.opponent,765,1210);
+    teamName('GWRFC',315,1210);teamName(f.opponent,765,1210);
   }else{
     drawHeadline(190,350);
     if(kick)text("LET'S GO REVS!",540,650,110,ink,950);
     else{
       const win=mode==='full'&&Number(f.gwScore)>Number(f.oppScore);
       if(win)drawWin(ink);
-      drawDetail(f.detail||(mode==='try'?'RAISE HIGH. RAISE HELL.':''),win?650:570,ink,win?42:66);
+      drawDetail(f.detail||'',win?650:570,ink,win?42:66);
     }
     drawScores(kick?0:f.gwScore,kick?0:f.oppScore,ink);
     badge('gw',310,1280,140);badge('opponent',770,1280,140);text(separator,540,1280,82,ink,140);
@@ -159,10 +156,8 @@ function render(){
     text(f.address,540,1720,82,ink,950,true);
     text(f.note,540,1845,68,ink,950,true);
   }else{
-    text(dateAndTime,540,kick?1625:1660,72,ink,950,true);
-    text(f.venue,540,kick?1725:1760,106,ink,950,true);
-    text(f.address,540,kick?1815:1855,76,ink,950,true);
-    if(kick)text(f.note,540,1880,58,ink,950,true);
+    text(f.venue,540,1760,106,ink,950,true);
+    text(f.address,540,1855,76,ink,950,true);
   }
   prepareExport();
 }
