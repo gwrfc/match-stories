@@ -98,20 +98,32 @@ function syncLineup(selected=form.elements.captain.value){
   return players;
 }
 function drawLineup(f,ink){
-  ctx.save();let titleSize=152;
-  const titleFont=()=>`700 ${titleSize}px "Story Avenir", "Avenir Next Condensed", "Arial Narrow", sans-serif`;ctx.font=titleFont();
-  while(ctx.measureText('LINEUP').width>450&&titleSize>60){titleSize-=2;ctx.font=titleFont()}
-  ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillStyle=ink;ctx.fillText('LINEUP',145,320);ctx.restore();
-  text(f.setting==='Away'?'@':'vs',705,320,76,ink,110);badge('opponent',875,320,94);
+  const titleX=145,circleX=875,circleRadius=94;
+  ctx.save();let titleSize=184;
+  const titleFont=()=>`700 ${titleSize}px "Story Avenir", "Avenir Next Condensed", "Arial Narrow", sans-serif`;
+  ctx.textAlign='left';ctx.textBaseline='middle';ctx.font=titleFont();
+  while(ctx.measureText('LINEUP').width>500&&titleSize>60){titleSize-=2;ctx.font=titleFont()}
+  const titleRight=titleX+ctx.measureText('LINEUP').actualBoundingBoxRight;
+  ctx.fillStyle=ink;ctx.fillText('LINEUP',titleX,320);
+  const circleLeft=circleX-circleRadius,separator=f.setting==='Away'?'@':'vs';
+  const separatorCenter=(titleRight+circleLeft)/2;let separatorSize=76;
+  const separatorFont=()=>`700 ${separatorSize}px "Story Avenir", "Avenir Next Condensed", "Arial Narrow", sans-serif`;
+  ctx.font=separatorFont();
+  while(ctx.measureText(separator).width>circleLeft-titleRight-32&&separatorSize>20){separatorSize-=2;ctx.font=separatorFont()}
+  const metrics=ctx.measureText(separator);
+  ctx.fillText(separator,separatorCenter-(metrics.actualBoundingBoxRight-metrics.actualBoundingBoxLeft)/2,320);
+  ctx.restore();badge('opponent',circleX,320,circleRadius);
   const players=lineupTools.parse(f.players).slice(0,23),rowCount=Math.max(15,players.length);
   const rowHeight=Math.min(76,1200/rowCount),baseSize=Math.min(66,rowHeight*.91);
   for(let i=0;i<rowCount;i++){
     const y=510+i*rowHeight,name=players[i]?lineupTools.name(players,i,f.captain):'—';
     ctx.save();ctx.font=`700 ${baseSize}px "Story Avenir", "Avenir Next Condensed", "Arial Narrow", sans-serif`;
-    ctx.textBaseline='middle';ctx.fillStyle=ink;ctx.textAlign='left';ctx.fillText(String(i+1),145,y);
+    ctx.textBaseline='middle';ctx.fillStyle=ink;ctx.textAlign='left';
+    const number=String(i+1),numberMetrics=ctx.measureText(number);
+    ctx.fillText(number,205-numberMetrics.actualBoundingBoxRight,y);ctx.fillText('.',218,y);
     let size=baseSize;
-    while(ctx.measureText(name).width>690&&size>14){size-=1;ctx.font=`700 ${size}px "Story Avenir", "Avenir Next Condensed", "Arial Narrow", sans-serif`}
-    ctx.fillText(name,245,y);ctx.restore();
+    while(ctx.measureText(name).width>675&&size>14){size-=1;ctx.font=`700 ${size}px "Story Avenir", "Avenir Next Condensed", "Arial Narrow", sans-serif`}
+    ctx.fillText(name,260,y);ctx.restore();
   }
   let date='';if(f.date){const d=new Date(f.date+'T12:00:00');if(!isNaN(d))date=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).toUpperCase()}
   text([date,f.kickoff].filter(Boolean).join('  ·  '),540,1775,56,ink,950,true);
