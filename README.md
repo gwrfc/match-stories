@@ -19,3 +19,9 @@ Avenir Next Condensed uses locally installed fonts, with condensed fallbacks on 
 ## Local preview
 
 Run `python3 -m http.server 8765` in this directory, then open http://localhost:8765.
+
+## Saving on phones
+
+Save / share story opens the native file share sheet when supported over HTTPS. Choose Save Image or a Photos destination if your phone offers it. Open image to save is the fallback: press and hold the full-resolution PNG to see browser save options. Download PNG remains available. Browsers cannot silently write to the Photos library.
+
+The editor uses larger mobile controls, single-column detail fields, and quick links between editing and preview. Avenir font availability does not block image creation on other devices.

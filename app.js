@@ -8,7 +8,7 @@ try{const old=JSON.parse(localStorage.getItem('gw-story-v1')||'null');if(old){mo
 function load(src){return new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=src})}
 let backgrounds={},gwCrest,opponentImages={},headlines={};
 const headlineFiles={match:"match-day",kickoff:"kick-off",score:"score-update",half:"half-time",try:"gw-try",full:"full-time"};
-async function init(){try{[backgrounds.buff,backgrounds.blue,gwCrest]=await Promise.all([load('assets/story-background-buff-v4.png'),load('assets/story-background-blue-v4.png'),load('assets/clubs/george-washington-university.png')]);await Promise.all(opponents.map(async team=>{opponentImages[team.name]=await load(team.src)}));await Promise.all(Object.entries(headlineFiles).map(async ([key,file])=>{headlines[key]={buff:await load('assets/headlines/'+file+'.svg'),blue:await load('assets/headlines/'+file+'-white.svg')}}));await Promise.all([document.fonts.load('700 60px "Story Avenir"'),document.fonts.load('italic 600 60px "Story Avenir"')]);ready=true;render()}catch{$('#status').textContent='Could not load the club artwork. Please refresh.';$('#download').disabled=true}}
+async function init(){try{[backgrounds.buff,backgrounds.blue,gwCrest]=await Promise.all([load('assets/story-background-buff-v4.png'),load('assets/story-background-blue-v4.png'),load('assets/clubs/george-washington-university.png')]);await Promise.all(opponents.map(async team=>{opponentImages[team.name]=await load(team.src)}));await Promise.all(Object.entries(headlineFiles).map(async ([key,file])=>{headlines[key]={buff:await load('assets/headlines/'+file+'.svg'),blue:await load('assets/headlines/'+file+'-white.svg')}}));await Promise.allSettled([document.fonts.load('700 60px "Story Avenir"'),document.fonts.load('italic 600 60px "Story Avenir"')]);ready=true;render()}catch{$('#status').textContent='Could not load the club artwork. Please refresh.';setExportEnabled(false)}}
 function fields(){return Object.fromEntries(new FormData(form))}
 function save(){try{localStorage.setItem('gw-story-v1',JSON.stringify({mode,fields:fields()}));$('#saved').textContent='Saved on this device'}catch{$('#saved').textContent='Changes kept for this session'}}
 function selectMode(m){mode=m;$('#moments').innerHTML=layouts.map(([id,icon,label])=>`<button type="button" class="moment ${m===id?'active':''}" aria-pressed="${m===id}" data-mode="${id}"><b>${icon}</b>${label}</button>`).join('');$('#scoreFields').hidden=m==='match'||m==='kickoff';$('#matchFields').hidden=false;render()}
@@ -91,10 +91,48 @@ function render(){
     text(f.address,540,kick?1815:1855,76,ink,950,true);
     if(kick)text(f.note,540,1880,58,ink,950,true);
   }
+  prepareExport();
 }
 form.addEventListener('input',()=>{render();save()});form.addEventListener('change',()=>{render();save()});
 document.querySelectorAll('[data-points]').forEach(b=>b.onclick=()=>{form.elements.gwScore.value=Math.min(999,Number(form.elements.gwScore.value)+Number(b.dataset.points));render();save()});
 $('#guides').onclick=()=>{const on=$('.safe-overlay').hidden;$('.safe-overlay').hidden=!on;$('#guides').setAttribute('aria-pressed',on)};
 $('#reset').onclick=()=>{for(const[k,v]of Object.entries(defaults))form.elements[k].value=v;selectMode('match');save()};
-$('#download').onclick=()=>{if(!ready)return;render();c.toBlob(blob=>{if(!blob){$('#status').textContent='Download failed. Please try again.';return}const a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=`gw-${mode}-${fields().opponent.toLowerCase().replace(/[^a-z0-9]+/g,'-')}.png`;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);$('#status').textContent='Story downloaded. You’re ready to post.'},'image/png')};
+let preparedFile=null,exportRevision=0,exportTimer,previewUrl;
+function setExportEnabled(enabled){for(const id of ['saveStory','viewImage','download'])$('#'+id).disabled=!enabled}
+function prepareExport(){
+  const revision=++exportRevision;clearTimeout(exportTimer);preparedFile=null;setExportEnabled(false);
+  exportTimer=setTimeout(()=>c.toBlob(blob=>{
+    if(revision!==exportRevision)return;
+    if(!blob){$('#status').textContent='Could not prepare the image. Please try again.';return}
+    const name=`gw-${mode}-${fields().opponent.toLowerCase().replace(/[^a-z0-9]+/g,'-')}.png`;
+    preparedFile=new File([blob],name,{type:'image/png'});setExportEnabled(true);
+  },'image/png'),120);
+}
+function openImage(){
+  if(!preparedFile)return;
+  if(previewUrl)URL.revokeObjectURL(previewUrl);
+  previewUrl=URL.createObjectURL(preparedFile);$('#exportImage').src=previewUrl;
+  $('#imageDialog').showModal();
+}
+function downloadStory(){
+  if(!preparedFile)return;
+  const a=document.createElement('a'),url=URL.createObjectURL(preparedFile);
+  a.href=url;a.download=preparedFile.name;document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+  $('#status').textContent='PNG download started. To save to Photos, try Save / share or Open image to save.';
+}
+$('#saveStory').onclick=()=>{
+  if(!preparedFile)return;
+  const data={files:[preparedFile]};
+  if(window.isSecureContext&&navigator.share&&navigator.canShare&&navigator.canShare(data)){
+    // The PNG is prepared before the tap so the native share sheet keeps its user gesture.
+    navigator.share(data).then(()=>{$('#status').textContent='Share sheet closed. Choose Save Image there to keep a copy in Photos.'}).catch(error=>{
+      if(error.name==='AbortError'){$('#status').textContent='Sharing cancelled. Your story is still ready.';return}
+      $('#status').textContent='Sharing is unavailable here. Press and hold the image to save it.';openImage();
+    });
+  }else{openImage();$('#status').textContent='Press and hold the full-size image to see your phone’s save options.'}
+};
+$('#download').onclick=downloadStory;$('#dialogDownload').onclick=downloadStory;
+$('#viewImage').onclick=openImage;$('#closeImage').onclick=()=>$('#imageDialog').close();
+$('#imageDialog').addEventListener('close',()=>{if(previewUrl){URL.revokeObjectURL(previewUrl);previewUrl=null;$('#exportImage').removeAttribute('src')}});
 selectMode(mode);init();
