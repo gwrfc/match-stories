@@ -1,6 +1,6 @@
 # GW Rugby Match Stories
 
-Instagram story creator for GW Men’s Rugby, with match day, kick-off, score update, half-time, try, and full-time layouts.
+Instagram story creator for GW Men’s Rugby, with match day, kick-off, score update, half-time, try, full-time, and lineup layouts.
 
 Live site: https://match-stories.gwmensrugby.com
 
@@ -25,3 +25,7 @@ Run `python3 -m http.server 8765` in this directory, then open http://localhost:
 Save / share story opens the native file share sheet when supported over HTTPS. Choose Save Image or a Photos destination if your phone offers it. Open image to save is the fallback: press and hold the full-resolution PNG to see browser save options. Download PNG remains available. Browsers cannot silently write to the Photos library.
 
 The editor uses larger mobile controls, single-column detail fields, and quick links between editing and preview. Avenir font availability does not block image creation on other devices.
+
+## Lineup stories
+
+Choose Lineup, paste 15–23 names separated by new lines or commas, and select the captain’s shirt number. The preview numbers the names in order and adds (c) to the captain. Home and Neutral use vs; Away uses @ with the opponent badge. Squad details are saved on this device with the rest of the match. Export requires 15–23 players.

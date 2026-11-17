@@ -1,17 +1,18 @@
 const $=s=>document.querySelector(s), form=$('#form'), c=$('#story'),ctx=c.getContext('2d');
-const layouts=[['match','⚑','Match day'],['kickoff','↗','Kick-off'],['score','≡','Score update'],['half','◷','Half-time'],['try','★','GW try'],['full','✓','Full-time']];
+const layouts=[['match','⚑','Match day'],['kickoff','↗','Kick-off'],['score','≡','Score update'],['half','◷','Half-time'],['try','★','GW try'],['full','✓','Full-time'],['lineup','☷','Lineup']];
 let mode='match',ready=false;
 for(const team of opponents){const option=new Option(team.name,team.name);form.elements.opponent.add(option)}
 form.elements.opponent.value='William & Mary';
+syncLineup();
 const defaults=Object.fromEntries(new FormData(form));
-try{const old=JSON.parse(localStorage.getItem('gw-story-v1')||'null');if(old){mode=layouts.some(x=>x[0]===old.mode)?old.mode:'match';for(const [k,v]of Object.entries(old.fields||{}))if(form.elements[k])form.elements[k].value=v;if(!opponents.some(t=>t.name===form.elements.opponent.value))form.elements.opponent.value='William & Mary'}}catch{}
+try{const old=JSON.parse(localStorage.getItem('gw-story-v1')||'null');if(old){mode=layouts.some(x=>x[0]===old.mode)?old.mode:'match';for(const [k,v]of Object.entries(old.fields||{}))if(form.elements[k])form.elements[k].value=v;if(!opponents.some(t=>t.name===form.elements.opponent.value))form.elements.opponent.value='William & Mary';syncLineup(old.fields?.captain||'')}}catch{}
 function load(src){return new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=src})}
 let backgrounds={},gwCrest,opponentImages={},headlines={};
 const headlineFiles={match:"match-day",kickoff:"kick-off",score:"score-update",half:"half-time",try:"gw-try",full:"full-time"};
 async function init(){try{[backgrounds.buff,backgrounds.blue,gwCrest]=await Promise.all([load('assets/story-background-buff-v4.png'),load('assets/story-background-blue-v4.png'),load('assets/clubs/george-washington-university.png')]);await Promise.all(opponents.map(async team=>{opponentImages[team.name]=await load(team.src)}));await Promise.all(Object.entries(headlineFiles).map(async ([key,file])=>{headlines[key]={buff:await load('assets/headlines/'+file+'.svg'),blue:await load('assets/headlines/'+file+'-white.svg')}}));await Promise.allSettled([document.fonts.load('700 60px "Story Avenir"'),document.fonts.load('italic 600 60px "Story Avenir"')]);ready=true;render()}catch{$('#status').textContent='Could not load the club artwork. Please refresh.';setExportEnabled(false)}}
 function fields(){return Object.fromEntries(new FormData(form))}
 function save(){try{localStorage.setItem('gw-story-v1',JSON.stringify({mode,fields:fields()}));$('#saved').textContent='Saved on this device'}catch{$('#saved').textContent='Changes kept for this session'}}
-function selectMode(m){mode=m;$('#moments').innerHTML=layouts.map(([id,icon,label])=>`<button type="button" class="moment ${m===id?'active':''}" aria-pressed="${m===id}" data-mode="${id}"><b>${icon}</b>${label}</button>`).join('');$('#scoreFields').hidden=m==='match'||m==='kickoff';$('#matchFields').hidden=false;render()}
+function selectMode(m){mode=m;$('#moments').innerHTML=layouts.map(([id,icon,label])=>`<button type="button" class="moment ${m===id?'active':''}" aria-pressed="${m===id}" data-mode="${id}"><b>${icon}</b>${label}</button>`).join('');$('#scoreFields').hidden=m==='match'||m==='kickoff'||m==='lineup';$('#lineupFields').hidden=m!=='lineup';$('#matchFields').hidden=false;for(const name of ['address','note'])form.elements[name].closest('label').hidden=m==='lineup';syncLineup();render()}
 $('#moments').addEventListener('click',e=>{const b=e.target.closest('button');if(b){selectMode(b.dataset.mode);save()}});
 function text(str,x,y,size=60,color,max=930,italic=false){
   if(!str)return;
@@ -86,9 +87,40 @@ function drawWin(ink){
   ctx.translate(540,595);ctx.scale(targetWidth/width,1);
   text(label,0,0,size,ink,2000,true);ctx.restore();
 }
+function syncLineup(selected=form.elements.captain.value){
+  const players=lineupTools.parse(form.elements.players.value),captain=form.elements.captain;
+  captain.replaceChildren(new Option('No captain selected',''));
+  for(let i=1;i<=Math.min(players.length,23);i++)captain.add(new Option(String(i),String(i)));
+  captain.value=Number(selected)>0&&Number(selected)<=Math.min(players.length,23)?String(selected):'';
+  const count=players.length,valid=lineupTools.valid(players);
+  $('#lineupCount').textContent=count===0?'Enter your squad to start.':valid?`${count} players · ready to export`:count<15?`${count} players entered · add ${15-count} more to reach 15.`:`${count} players entered · remove ${count-23} to stay within 23. Preview shows the first 23.`;
+  $('#players').setAttribute('aria-invalid',String(count>0&&!valid));
+  return players;
+}
+function drawLineup(f,ink){
+  ctx.save();let titleSize=152;
+  const titleFont=()=>`700 ${titleSize}px "Story Avenir", "Avenir Next Condensed", "Arial Narrow", sans-serif`;ctx.font=titleFont();
+  while(ctx.measureText('LINEUP').width>450&&titleSize>60){titleSize-=2;ctx.font=titleFont()}
+  ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillStyle=ink;ctx.fillText('LINEUP',145,320);ctx.restore();
+  text(f.setting==='Away'?'@':'vs',705,320,76,ink,110);badge('opponent',875,320,94);
+  const players=lineupTools.parse(f.players).slice(0,23),rowCount=Math.max(15,players.length);
+  const rowHeight=Math.min(76,1200/rowCount),baseSize=Math.min(66,rowHeight*.91);
+  for(let i=0;i<rowCount;i++){
+    const y=510+i*rowHeight,name=players[i]?lineupTools.name(players,i,f.captain):'—';
+    ctx.save();ctx.font=`700 ${baseSize}px "Story Avenir", "Avenir Next Condensed", "Arial Narrow", sans-serif`;
+    ctx.textBaseline='middle';ctx.fillStyle=ink;ctx.textAlign='left';ctx.fillText(String(i+1),145,y);
+    let size=baseSize;
+    while(ctx.measureText(name).width>690&&size>14){size-=1;ctx.font=`700 ${size}px "Story Avenir", "Avenir Next Condensed", "Arial Narrow", sans-serif`}
+    ctx.fillText(name,245,y);ctx.restore();
+  }
+  let date='';if(f.date){const d=new Date(f.date+'T12:00:00');if(!isNaN(d))date=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).toUpperCase()}
+  text([date,f.kickoff].filter(Boolean).join('  ·  '),540,1775,56,ink,950,true);
+  text(f.venue,540,1850,68,ink,950,true);
+}
 function render(){
   if(!ready)return;const f=fields(),blue=f.theme==='blue',ink=blue?'#ffffff':'#092b50';
   ctx.clearRect(0,0,1080,1920);ctx.drawImage(backgrounds[f.theme]||backgrounds.buff,0,0,1080,1920);
+  if(mode==='lineup'){drawLineup(f,ink);prepareExport();return}
 
   const match=mode==='match',kick=mode==='kickoff',separator=f.setting==='Away'?'@':'vs';
   if(match){
@@ -122,7 +154,7 @@ function render(){
   }
   prepareExport();
 }
-form.addEventListener('input',()=>{render();save()});form.addEventListener('change',()=>{render();save()});
+form.addEventListener('input',e=>{if(e.target.name==='players')syncLineup();render();save()});form.addEventListener('change',e=>{if(e.target.name==='players')syncLineup();render();save()});
 document.querySelectorAll('[data-points]').forEach(b=>b.onclick=()=>{const field=b.dataset.team==='opponent'?form.elements.oppScore:form.elements.gwScore;field.value=Math.min(999,Math.max(0,Number(field.value)||0)+Number(b.dataset.points));render();save()});
 $('#guides').onclick=()=>{const on=$('.safe-overlay').hidden;$('.safe-overlay').hidden=!on;$('#guides').setAttribute('aria-pressed',on)};
 $('#reset').onclick=()=>{for(const[k,v]of Object.entries(defaults))form.elements[k].value=v;selectMode('match');save()};
@@ -134,7 +166,7 @@ function prepareExport(){
     if(revision!==exportRevision)return;
     if(!blob){$('#status').textContent='Could not prepare the image. Please try again.';return}
     const name=`gw-${mode}-${fields().opponent.toLowerCase().replace(/[^a-z0-9]+/g,'-')}.png`;
-    preparedFile=new File([blob],name,{type:'image/png'});setExportEnabled(true);
+    preparedFile=new File([blob],name,{type:'image/png'});setExportEnabled(mode!=='lineup'||lineupTools.valid(lineupTools.parse(fields().players)));
   },'image/png'),120);
 }
 function openImage(){
